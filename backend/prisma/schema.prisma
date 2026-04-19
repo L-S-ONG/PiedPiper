@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  PROVIDER
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  role          Role
+  createdAt     DateTime @default(now())
+
+  // Relations
+  providerProfile ProviderProfile? 
+}
+
+model ProviderProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  businessName    String
+  category        String   // e.g., "Plumbing", "Ice Cream", "Aircon Servicing"
+  description     String?
+  address         String?
+  
+  // Geospatial Data
+  latitude        Float
+  longitude       Float
+  
+  openingHours    Json     // e.g., { "mon": "9-5", "tue": "9-5" }
+  isLiveNow       Boolean  @default(false) 
+  
+  user            User     @relation(fields: [userId], references: [id])
+  offerings       Offering[] 
+}
+
+model Offering {
+  id                String   @id @default(uuid())
+  providerProfileId String
+  name              String   
+  description       String?
+  price             Float?
+  
+  provider          ProviderProfile @relation(fields: [providerProfileId], references: [id])
+}
