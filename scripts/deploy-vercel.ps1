@@ -36,7 +36,7 @@ function Get-DotEnvValue([string]$path, [string]$key) {
 $token = $env:VERCEL_TOKEN
 if (-not $token) { $token = Get-DotEnvValue (Join-Path $backend '.env') 'VERCEL_TOKEN' }
 if (-not $token) {
-  Write-Host "Set VERCEL_TOKEN (env) or add it to backend\.env — see https://vercel.com/account/tokens" -ForegroundColor Red
+  Write-Host 'Set VERCEL_TOKEN (env) or add it to backend\.env - see https://vercel.com/account/tokens' -ForegroundColor Red
   exit 1
 }
 
@@ -60,10 +60,11 @@ Write-Host "Deploying backend (production)..." -ForegroundColor Cyan
 $deployOut = & $vc[0] $vc[1] deploy $backend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
 $combined = $deployOut -join "`n"
 $backendHost = $null
-if ($combined -match '"url"\s*:\s*"([^"]+)"') { $backendHost = $Matches[1] }
-if (-not $backendHost) {
+$braceStart = $combined.IndexOf('{')
+$braceEnd = $combined.LastIndexOf('}')
+if ($braceStart -ge 0 -and $braceEnd -gt $braceStart) {
   try {
-    $d = ($deployOut | Where-Object { $_ -match '^\s*\{' }) | Select-Object -Last 1 | ConvertFrom-Json
+    $d = $combined.Substring($braceStart, $braceEnd - $braceStart + 1) | ConvertFrom-Json
     if ($d.url) { $backendHost = [string]$d.url }
   } catch { }
 }
@@ -84,7 +85,14 @@ Write-Host "Deploying frontend (production)..." -ForegroundColor Cyan
 $feOut = & $vc[0] $vc[1] deploy $frontend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
 $feCombined = $feOut -join "`n"
 $feUrl = $null
-if ($feCombined -match '"url"\s*:\s*"([^"]+)"') { $feUrl = $Matches[1] }
+$fs = $feCombined.IndexOf('{')
+$fe = $feCombined.LastIndexOf('}')
+if ($fs -ge 0 -and $fe -gt $fs) {
+  try {
+    $fj = $feCombined.Substring($fs, $fe - $fs + 1) | ConvertFrom-Json
+    if ($fj.url) { $feUrl = [string]$fj.url }
+  } catch { }
+}
 if ($feUrl) {
   if ($feUrl -notmatch '^https?://') { $feUrl = "https://$feUrl" }
   Write-Host "Frontend URL: $feUrl" -ForegroundColor Green
