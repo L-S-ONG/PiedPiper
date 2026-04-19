@@ -3,6 +3,8 @@
 #   1) Node 18+ on PATH (e.g. C:\Program Files\nodejs first).
 #   2) Auth: set VERCEL_TOKEN in environment, OR add VERCEL_TOKEN=... to backend\.env (gitignored).
 #   3) backend\.env must contain DATABASE_URL for Neon/Postgres.
+#   4) If the CLI says missing_scope, set VERCEL_SCOPE (env or backend\.env) to your team slug
+#      (from Vercel dashboard URL or `vercel teams ls`).
 #
 # Create a token: https://vercel.com/account/tokens
 
@@ -46,18 +48,23 @@ if (-not $dbUrl) {
   exit 1
 }
 
+$scope = $env:VERCEL_SCOPE
+if (-not $scope) { $scope = Get-DotEnvValue (Join-Path $backend '.env') 'VERCEL_SCOPE' }
+$scopeArgs = @()
+if ($scope) { $scopeArgs = @('--scope', $scope) }
+
 $vc = "npx", "vercel@latest"
 $backendProject = "piedpiper-backend"
 $frontendProject = "piedpiper-frontend"
 
 Write-Host "Linking backend project..." -ForegroundColor Cyan
-& $vc[0] $vc[1] link --yes --project $backendProject -t $token --cwd $backend | Out-Host
+& $vc[0] $vc[1] @scopeArgs link --yes --project $backendProject -t $token --cwd $backend | Out-Host
 
 Write-Host "Setting DATABASE_URL on backend (production)..." -ForegroundColor Cyan
-& $vc[0] $vc[1] env add DATABASE_URL production --value $dbUrl --yes --force -t $token --cwd $backend 2>&1 | Out-Host
+& $vc[0] $vc[1] @scopeArgs env add DATABASE_URL production --value $dbUrl --yes --force -t $token --cwd $backend
 
 Write-Host "Deploying backend (production)..." -ForegroundColor Cyan
-$deployOut = & $vc[0] $vc[1] deploy $backend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
+$deployOut = & $vc[0] $vc[1] @scopeArgs deploy $backend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
 $combined = $deployOut -join "`n"
 $backendHost = $null
 $braceStart = $combined.IndexOf('{')
@@ -76,13 +83,13 @@ if ($backendHost -notmatch '^https?://') { $backendHost = "https://$backendHost"
 Write-Host "Backend URL: $backendHost" -ForegroundColor Green
 
 Write-Host "Linking frontend project..." -ForegroundColor Cyan
-& $vc[0] $vc[1] link --yes --project $frontendProject -t $token --cwd $frontend | Out-Host
+& $vc[0] $vc[1] @scopeArgs link --yes --project $frontendProject -t $token --cwd $frontend | Out-Host
 
 Write-Host "Setting VITE_API_URL on frontend (production)..." -ForegroundColor Cyan
-& $vc[0] $vc[1] env add VITE_API_URL production --value $backendHost --yes --force -t $token --cwd $frontend 2>&1 | Out-Host
+& $vc[0] $vc[1] @scopeArgs env add VITE_API_URL production --value $backendHost --yes --force -t $token --cwd $frontend
 
 Write-Host "Deploying frontend (production)..." -ForegroundColor Cyan
-$feOut = & $vc[0] $vc[1] deploy $frontend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
+$feOut = & $vc[0] $vc[1] @scopeArgs deploy $frontend --prod --yes -t $token --format json 2>&1 | ForEach-Object { $_.ToString() }
 $feCombined = $feOut -join "`n"
 $feUrl = $null
 $fs = $feCombined.IndexOf('{')
